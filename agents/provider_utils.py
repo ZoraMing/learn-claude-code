@@ -1,11 +1,11 @@
 """
-Provider utilities for multi-provider AI agent support.
+多提供商 AI 代理支持的提供商工具库。
 
-This module provides a unified interface for multiple AI providers (Anthropic, OpenAI, Gemini),
-allowing the existing agent code (v0-v4) to run unchanged.
+本模块为多个 AI 提供商（Anthropic, OpenAI, Gemini）提供统一接口，
+允许现有的代理代码（v0-v4）无需修改即可运行。
 
-It uses the Adapter Pattern to make OpenAI-compatible clients look exactly like
-Anthropic clients to the consuming code.
+它使用适配器模式（Adapter Pattern），使兼容 OpenAI 协议的客户端
+在调用代码面前表现得与 Anthropic 客户端完全一致。
 """
 
 import os
@@ -13,21 +13,21 @@ import json
 from typing import Dict, List
 from dotenv import load_dotenv
 
-# Load environment variables
+# 加载环境变量
 load_dotenv()
 
 # =============================================================================
-# Data Structures (Mimic Anthropic SDK)
+# 数据结构（模拟 Anthropic SDK）
 # =============================================================================
 
 class ResponseWrapper:
-    """Wrapper to make OpenAI responses look like Anthropic responses."""
+    """包装器，使 OpenAI 的响应看起来像 Anthropic 的响应。"""
     def __init__(self, content, stop_reason):
         self.content = content
         self.stop_reason = stop_reason
 
 class ContentBlock:
-    """Wrapper to make content blocks look like Anthropic content blocks."""
+    """包装器，使内容块（Content Block）看起来像 Anthropic 的内容块。"""
     def __init__(self, block_type, **kwargs):
         self.type = block_type
         for key, value in kwargs.items():
@@ -38,32 +38,32 @@ class ContentBlock:
         return f"ContentBlock({attrs})"
 
 # =============================================================================
-# Adapters
+# 适配器
 # =============================================================================
 
 class OpenAIAdapter:
     """
-    Adapts the OpenAI client to look like an Anthropic client.
+    将 OpenAI 客户端适配为 Anthropic 客户端的形式。
     
-    Key Magic:
+    关键魔法：
     self.messages = self 
     
-    This allows the agent code to call:
+    这允许代理代码调用：
     client.messages.create(...)
     
-    which resolves to:
+    实际上会解析为调用：
     adapter.create(...)
     """
     def __init__(self, openai_client):
         self.client = openai_client
-        self.messages = self  # Duck typing: act as the 'messages' resource
+        self.messages = self  # 鸭子类型：充当 'messages' 资源
 
     def create(self, model: str, system: str, messages: List[Dict], tools: List[Dict], max_tokens: int = 8000):
         """
-        The core translation layer. 
-        Converts Anthropic inputs -> OpenAI inputs -> OpenAI API -> Anthropic outputs.
+        核心转换层。
+        转换流程：Anthropic 输入 -> OpenAI 输入 -> OpenAI API -> Anthropic 输出。
         """
-        # 1. Convert Messages (Anthropic -> OpenAI)
+        # 1. 转换消息格式（Anthropic -> OpenAI）
         openai_messages = [{"role": "system", "content": system}]
         
         for msg in messages:
@@ -72,10 +72,10 @@ class OpenAIAdapter:
             
             if role == "user":
                 if isinstance(content, str):
-                    # Simple text message
+                    # 普通文本消息
                     openai_messages.append({"role": "user", "content": content})
                 elif isinstance(content, list):
-                    # Tool results (User role in Anthropic, Tool role in OpenAI)
+                    # 工具结果（Anthropic 中角色为 User，OpenAI 中角色为 Tool）
                     for part in content:
                         if part.get("type") == "tool_result":
                             openai_messages.append({
@@ -83,22 +83,22 @@ class OpenAIAdapter:
                                 "tool_call_id": part["tool_use_id"],
                                 "content": part["content"] or "(no output)"
                             })
-                        # Note: Anthropic user messages can also contain text+image, 
-                        # but v0-v4 agents don't use that yet.
+                        # 注意：Anthropic 用户消息也可以包含文本+图像，
+                        # 但 v0-v4 代理暂未使用该功能。
 
             elif role == "assistant":
                 if isinstance(content, str):
-                    # Simple text message
+                    # 普通文本消息
                     openai_messages.append({"role": "assistant", "content": content})
                 elif isinstance(content, list):
-                    # Tool calls (Assistant role)
-                    # Anthropic splits thought (text) and tool_use into blocks
-                    # OpenAI puts thought in 'content' and tools in 'tool_calls'
+                    # 工具调用（助手角色）
+                    # Anthropic 将思考（文本）和工具使用（tool_use）拆分为不同的块
+                    # OpenAI 将思考放在 'content' 中，工具调用放在 'tool_calls' 中
                     text_parts = []
                     tool_calls = []
                     
                     for part in content:
-                        # Handle both dicts and objects (ContentBlock)
+                        # 处理字典（dict）和对象（ContentBlock）两种情况
                         if isinstance(part, dict):
                             part_type = part.get("type")
                             part_text = part.get("text")
@@ -132,7 +132,7 @@ class OpenAIAdapter:
                     
                     openai_messages.append(assistant_msg)
 
-        # 2. Convert Tools (Anthropic -> OpenAI)
+        # 2. 转换工具定义（Anthropic -> OpenAI）
         openai_tools = []
         for tool in tools:
             openai_tools.append({
@@ -144,8 +144,8 @@ class OpenAIAdapter:
                 }
             })
 
-        # 3. Call OpenAI API
-        # Note: Gemini/OpenAI handle max_tokens differently, but usually support the param
+        # 3. 调用 OpenAI API
+        # 注意：Gemini/OpenAI 处理 max_tokens 的方式不同，但通常都支持该参数
         response = self.client.chat.completions.create(
             model=model,
             messages=openai_messages,
@@ -153,15 +153,15 @@ class OpenAIAdapter:
             max_tokens=max_tokens
         )
 
-        # 4. Convert Response (OpenAI -> Anthropic)
+        # 4. 转换响应格式（OpenAI -> Anthropic）
         message = response.choices[0].message
         content_blocks = []
 
-        # Extract text content
+        # 提取文本内容
         if message.content:
             content_blocks.append(ContentBlock("text", text=message.content))
 
-        # Extract tool calls
+        # 提取工具调用
         if message.tool_calls:
             for tool_call in message.tool_calls:
                 content_blocks.append(ContentBlock(
@@ -171,72 +171,72 @@ class OpenAIAdapter:
                     input=json.loads(tool_call.function.arguments)
                 ))
 
-        # Map stop reasons: OpenAI "stop"/"tool_calls" -> Anthropic "end_turn"/"tool_use"
-        # OpenAI: stop, length, content_filter, tool_calls
+        # 映射停止原因：OpenAI "stop"/"tool_calls" -> Anthropic "end_turn"/"tool_use"
+        # OpenAI 可能的状态：stop, length, content_filter, tool_calls
         finish_reason = response.choices[0].finish_reason
         if finish_reason == "tool_calls":
             stop_reason = "tool_use"
         elif finish_reason == "stop":
             stop_reason = "end_turn"
         else:
-            stop_reason = finish_reason # Fallback
+            stop_reason = finish_reason # 备选方案
 
         return ResponseWrapper(content_blocks, stop_reason)
 
 # =============================================================================
-# Factory Functions
+# 工厂函数
 # =============================================================================
 
 def get_provider():
-    """Get the current AI provider from environment variable."""
+    """从环境变量获取当前的 AI 提供商。"""
     return os.getenv("AI_PROVIDER", "anthropic").lower()
 
 def get_client():
     """
-    Return a client that conforms to the Anthropic interface.
+    返回一个符合 Anthropic 接口标准的客户端。
     
-    If AI_PROVIDER is 'anthropic', returns the native Anthropic client.
-    Otherwise, returns an OpenAIAdapter wrapping an OpenAI-compatible client.
+    如果 AI_PROVIDER 是 'anthropic'，返回原生的 Anthropic 客户端。
+    否则，返回一个封装了兼容 OpenAI 协议客户端的 OpenAIAdapter。
     """
     provider = get_provider()
 
     if provider == "anthropic":
         from anthropic import Anthropic
         base_url = os.getenv("ANTHROPIC_BASE_URL")
-        # Return native client - guarantees 100% behavior compatibility
+        # 返回原生客户端 - 保证 100% 的行为兼容性
         return Anthropic(
             api_key=os.getenv("ANTHROPIC_API_KEY"),
             base_url=base_url
         )
     
     else:
-        # For OpenAI/Gemini, we wrap the client to mimic Anthropic
+        # 对于 OpenAI/Gemini，我们封装客户端以模仿 Anthropic
         try:
             from openai import OpenAI
         except ImportError:
-            raise ImportError("Please install openai: pip install openai")
+            raise ImportError("请安装 openai 库：pip install openai")
 
         if provider == "openai":
             api_key = os.getenv("OPENAI_API_KEY")
             base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         elif provider == "gemini":
             api_key = os.getenv("GEMINI_API_KEY")
-            # Gemini OpenAI-compatible endpoint
+            # Gemini 的 OpenAI 兼容端点
             base_url = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
         else:
-            # Generic OpenAI-compatible provider
+            # 通用的兼容 OpenAI 协议的提供商
             api_key = os.getenv(f"{provider.upper()}_API_KEY")
             base_url = os.getenv(f"{provider.upper()}_BASE_URL")
 
         if not api_key:
-            raise ValueError(f"API Key for {provider} is missing. Please check your .env file.")
+            raise ValueError(f"缺少 {provider} 的 API Key。请检查您的 .env 文件。")
 
         raw_client = OpenAI(api_key=api_key, base_url=base_url)
         return OpenAIAdapter(raw_client)
 
 def get_model():
-    """Return model name from environment variable."""
+    """从环境变量获取模型名称。"""
     model = os.getenv("MODEL_NAME")
     if not model:
-        raise ValueError("MODEL_NAME environment variable is missing. Please set it in your .env file.")
+        raise ValueError("缺少 MODEL_NAME 环境变量。请在您的 .env 文件中设置它。")
     return model
