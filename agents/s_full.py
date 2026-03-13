@@ -36,7 +36,6 @@ NOT a teaching session -- this is the "put it all together" reference.
 """
 
 import json
-import os
 import re
 import subprocess
 import threading
@@ -45,16 +44,14 @@ import uuid
 from pathlib import Path
 from queue import Queue
 
-from anthropic import Anthropic
 from dotenv import load_dotenv
+from provider_utils import get_client, get_model
 
 load_dotenv(override=True)
-if os.getenv("ANTHROPIC_BASE_URL"):
-    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
 
 WORKDIR = Path.cwd()
-client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
-MODEL = os.environ["MODEL_ID"]
+client = get_client()
+MODEL = get_model()
 
 TEAM_DIR = WORKDIR / ".team"
 INBOX_DIR = TEAM_DIR / "inbox"

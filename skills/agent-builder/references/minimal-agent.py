@@ -11,14 +11,14 @@ Usage:
     3. Type commands, 'q' to quit
 """
 
-from anthropic import Anthropic
+from provider_utils import get_client, get_model
 from pathlib import Path
 import subprocess
 import os
 
 # Configuration
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-MODEL = os.getenv("MODEL_NAME", "claude-sonnet-4-20250514")
+client = get_client()
+MODEL = get_model()
 WORKDIR = Path.cwd()
 
 # System prompt - keep it simple
