@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-s01_agent_loop.py - The Agent Loop
+s01_agent_loop.py - 智能体循环 (The Agent Loop)
 
-The entire secret of an AI coding agent in one pattern:
+AI 编程智能体的全部秘密都包含在下面这个模式中：
 
     while stop_reason == "tool_use":
         response = LLM(messages, tools)
@@ -10,17 +10,17 @@ The entire secret of an AI coding agent in one pattern:
         append results
 
     +----------+      +-------+      +---------+
-    |   User   | ---> |  LLM  | ---> |  Tool   |
-    |  prompt  |      |       |      | execute |
+    |   用户   | ---> |  LLM  | ---> |  工具   |
+    |  提示词  |      |       |      | 执行    |
     +----------+      +---+---+      +----+----+
                           ^               |
                           |   tool_result |
                           +---------------+
-                          (loop continues)
+                          (循环继续)
 
-This is the core loop: feed tool results back to the model
-until the model decides to stop. Production agents layer
-policy, hooks, and lifecycle controls on top.
+这是核心循环：将工具执行结果反馈给模型，
+直到模型决定停止。生产级智能体在此之上
+叠加策略、钩子函数和生命周期控制层。
 """
 
 import os
@@ -61,19 +61,19 @@ def run_bash(command: str) -> str:
         return "Error: Timeout (120s)"
 
 
-# -- The core pattern: a while loop that calls tools until the model stops --
+# -- 核心模式：一个不断调用工具直到模型决定停止的 while 循环 --
 def agent_loop(messages: list):
     while True:
         response = client.messages.create(
             model=MODEL, system=SYSTEM, messages=messages,
             tools=TOOLS, max_tokens=8000,
         )
-        # Append assistant turn
+        # 追加助手的响应回合
         messages.append({"role": "assistant", "content": response.content})
-        # If the model didn't call a tool, we're done
+        # 如果模型没有调用工具，我们就完成了
         if response.stop_reason != "tool_use":
             return
-        # Execute each tool call, collect results
+        # 执行每个工具调用，收集结果
         results = []
         for block in response.content:
             if block.type == "tool_use":

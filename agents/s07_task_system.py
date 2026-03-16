@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-s07_task_system.py - Tasks
+s07_task_system.py - 任务系统 (Tasks)
 
-Tasks persist as JSON files in .tasks/ so they survive context compression.
-Each task has a dependency graph (blockedBy/blocks).
+任务作为 JSON 文件持久化保存在 .tasks/ 目录中，以便在上下文压缩中存活下来。
+每个任务都有一个依赖图 (blockedBy/blocks)。
 
     .tasks/
       task_1.json  {"id":1, "subject":"...", "status":"completed", ...}
       task_2.json  {"id":2, "blockedBy":[1], "status":"pending", ...}
       task_3.json  {"id":3, "blockedBy":[2], "blocks":[], ...}
 
-    Dependency resolution:
-    +----------+     +----------+     +----------+
-    | task 1   | --> | task 2   | --> | task 3   |
-    | complete |     | blocked  |     | blocked  |
-    +----------+     +----------+     +----------+
-         |                ^
-         +--- completing task 1 removes it from task 2's blockedBy
+    依赖关系解析：
+    +------------+     +----------+     +----------+
+    | 任务 1     | --> | 任务 2   | --> | 任务 3   |
+    | (已完成)   |     | (被阻塞) |     | (被阻塞) |
+    +------------+     +----------+     +----------+
+          |                 ^
+          +--- 完成任务 1 后，会将其从任务 2 的 blockedBy(被哪些阻塞) 列表中移除
 
-Key insight: "State that survives compression -- because it's outside the conversation."
+关键洞察："状态能够在压缩中存活——因为它游离在对话上下文之外。"
 """
 
 import json
@@ -41,7 +41,7 @@ TASKS_DIR = WORKDIR / ".tasks"
 SYSTEM = f"You are a coding agent at {WORKDIR}. Use task tools to plan and track work."
 
 
-# -- TaskManager: CRUD with dependency graph, persisted as JSON files --
+# -- 任务管理 (TaskManager): 带依赖图的增删改查 (CRUD)，保存为 JSON 文件 --
 class TaskManager:
     def __init__(self, tasks_dir: Path):
         self.dir = tasks_dir
@@ -81,14 +81,14 @@ class TaskManager:
             if status not in ("pending", "in_progress", "completed"):
                 raise ValueError(f"Invalid status: {status}")
             task["status"] = status
-            # When a task is completed, remove it from all other tasks' blockedBy
+            # 当一个任务被完成时，从所有其他任务的 blockedBy 列表中移除它
             if status == "completed":
                 self._clear_dependency(task_id)
         if add_blocked_by:
             task["blockedBy"] = list(set(task["blockedBy"] + add_blocked_by))
         if add_blocks:
             task["blocks"] = list(set(task["blocks"] + add_blocks))
-            # Bidirectional: also update the blocked tasks' blockedBy lists
+            # 双向同步：同时更新那些被阻塞任务的 blockedBy 列表
             for blocked_id in add_blocks:
                 try:
                     blocked = self._load(blocked_id)
@@ -101,7 +101,7 @@ class TaskManager:
         return json.dumps(task, indent=2)
 
     def _clear_dependency(self, completed_id: int):
-        """Remove completed_id from all other tasks' blockedBy lists."""
+        """从所有其他任务的 blockedBy 列表中移除 completed_id。"""
         for f in self.dir.glob("task_*.json"):
             task = json.loads(f.read_text())
             if completed_id in task.get("blockedBy", []):
@@ -125,7 +125,7 @@ class TaskManager:
 TASKS = TaskManager(TASKS_DIR)
 
 
-# -- Base tool implementations --
+# -- 基础工具实现 --
 def safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):

@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """
-s08_background_tasks.py - Background Tasks
+s08_background_tasks.py - 后台任务 (Background Tasks)
 
-Run commands in background threads. A notification queue is drained
-before each LLM call to deliver results.
+在后台线程中运行命令。在每次调用 LLM 之前，系统会清空并在
+对话上下文中注入通知队列里的结果。
 
-    Main thread                Background thread
+    主线程                      后台线程
     +-----------------+        +-----------------+
     | agent loop      |        | task executes   |
     | ...             |        | ...             |
     | [LLM call] <---+------- | enqueue(result) |
-    |  ^drain queue   |        +-----------------+
+    |  ^清空队列       |        +-----------------+
     +-----------------+
 
-    Timeline:
-    Agent ----[spawn A]----[spawn B]----[other work]----
+    时间线：
+    智能体 ----[派生 A]----[派生 B]----[其他工作]----
                  |              |
                  v              v
-              [A runs]      [B runs]        (parallel)
+              [A 运行]       [B 运行]        (并行)
                  |              |
-                 +-- notification queue --> [results injected]
+                 +-- 通知队列 --> [将结果注入到主循环]
 
-Key insight: "Fire and forget -- the agent doesn't block while the command runs."
+关键洞察："触发后不管——智能体在命令运行期间不会被阻塞。"
 """
 
 import os
@@ -44,7 +44,7 @@ MODEL = get_model()
 SYSTEM = f"You are a coding agent at {WORKDIR}. Use background_run for long-running commands."
 
 
-# -- BackgroundManager: threaded execution + notification queue --
+# -- 后台任务管理器 (BackgroundManager): 线程执行 + 通知队列 --
 class BackgroundManager:
     def __init__(self):
         self.tasks = {}  # task_id -> {status, result, command}
@@ -52,7 +52,7 @@ class BackgroundManager:
         self._lock = threading.Lock()
 
     def run(self, command: str) -> str:
-        """Start a background thread, return task_id immediately."""
+        """启动后台线程，并立即返回 task_id。"""
         task_id = str(uuid.uuid4())[:8]
         self.tasks[task_id] = {"status": "running", "result": None, "command": command}
         thread = threading.Thread(
@@ -62,7 +62,7 @@ class BackgroundManager:
         return f"Background task {task_id} started: {command[:80]}"
 
     def _execute(self, task_id: str, command: str):
-        """Thread target: run subprocess, capture output, push to queue."""
+        """线程执行目标：运行子进程、捕获输出并推入通知队列。"""
         try:
             r = subprocess.run(
                 command, shell=True, cwd=WORKDIR,
@@ -87,7 +87,7 @@ class BackgroundManager:
             })
 
     def check(self, task_id: str = None) -> str:
-        """Check status of one task or list all."""
+        """检查特定任务的状态或列出所有任务。"""
         if task_id:
             t = self.tasks.get(task_id)
             if not t:
@@ -99,7 +99,7 @@ class BackgroundManager:
         return "\n".join(lines) if lines else "No background tasks."
 
     def drain_notifications(self) -> list:
-        """Return and clear all pending completion notifications."""
+        """返回并清空所有待处理的完成通知。"""
         with self._lock:
             notifs = list(self._notification_queue)
             self._notification_queue.clear()
@@ -109,7 +109,7 @@ class BackgroundManager:
 BG = BackgroundManager()
 
 
-# -- Tool implementations --
+# -- 工具实现 --
 def safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):
@@ -185,7 +185,7 @@ TOOLS = [
 
 def agent_loop(messages: list):
     while True:
-        # Drain background notifications and inject as system message before LLM call
+        # 排空后台队列，并将其作为 user 消息连同 assistant 继续响应注入到 LLM 调用之前
         notifs = BG.drain_notifications()
         if notifs and messages:
             notif_text = "\n".join(

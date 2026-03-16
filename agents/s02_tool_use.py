@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-s02_tool_use.py - Tools
+s02_tool_use.py - 工具 (Tools)
 
-The agent loop from s01 didn't change. We just added tools to the array
-and a dispatch map to route calls.
+来自 s01 的智能体循环没有变化。我们只是向数组中添加了工具
+以及一个用于路由调用的分发映射表 (dispatch map)。
 
     +----------+      +-------+      +------------------+
-    |   User   | ---> |  LLM  | ---> | Tool Dispatch    |
-    |  prompt  |      |       |      | {                |
+    |   用户   | ---> |  LLM  | ---> | 工具分发         |
+    |  提示词  |      |       |      | {                |
     +----------+      +---+---+      |   bash: run_bash |
                           ^          |   read: run_read |
                           |          |   write: run_wr  |
@@ -15,7 +15,7 @@ and a dispatch map to route calls.
                           tool_result| }                |
                                      +------------------+
 
-Key insight: "The loop didn't change at all. I just added tools."
+关键洞察："循环根本没有改变。我只是添加了工具。"
 """
 
 import os
@@ -89,7 +89,7 @@ def run_edit(path: str, old_text: str, new_text: str) -> str:
         return f"Error: {e}"
 
 
-# -- The dispatch map: {tool_name: handler} --
+# -- 分发映射表：{tool_name: handler} --
 TOOL_HANDLERS = {
     "bash":       lambda **kw: run_bash(kw["command"]),
     "read_file":  lambda **kw: run_read(kw["path"], kw.get("limit")),

@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """
-s04_subagent.py - Subagents
+s04_subagent.py - 子智能体 (Subagents)
 
-Spawn a child agent with fresh messages=[]. The child works in its own
-context, sharing the filesystem, then returns only a summary to the parent.
+派生一个带有全新 messages=[] 状态的子智能体。子智能体在自己的
+上下文中工作，共享文件系统，然后仅向父智能体返回一份摘要。
 
-    Parent agent                     Subagent
+    父智能体                       子智能体
     +------------------+             +------------------+
-    | messages=[...]   |             | messages=[]      |  <-- fresh
-    |                  |  dispatch   |                  |
+    | messages=[...]   |             | messages=[]      |  <-- 全新的
+    |                  |   分发      |                  |
     | tool: task       | ---------->| while tool_use:  |
-    |   prompt="..."   |            |   call tools     |
-    |   description="" |            |   append results |
-    |                  |  summary   |                  |
-    |   result = "..." | <--------- | return last text |
+    |   prompt="..."   |            |   调用工具       |
+    |   description="" |            |   追加结果       |
+    |                  |   摘要      |                  |
+    |   result = "..." | <--------- | 返回最后文本     |
     +------------------+             +------------------+
               |
-    Parent context stays clean.
-    Subagent context is discarded.
+    父智能体上下文保持干净。
+    子智能体上下文被丢弃。
 
-Key insight: "Process isolation gives context isolation for free."
+关键洞察："进程隔离自然而然地提供了上下文隔离。"
 """
 
 import os
@@ -41,7 +41,7 @@ SYSTEM = f"You are a coding agent at {WORKDIR}. Use the task tool to delegate ex
 SUBAGENT_SYSTEM = f"You are a coding subagent at {WORKDIR}. Complete the given task, then summarize your findings."
 
 
-# -- Tool implementations shared by parent and child --
+# -- 父子共享的工具实现 --
 def safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):
@@ -97,7 +97,7 @@ TOOL_HANDLERS = {
     "edit_file":  lambda **kw: run_edit(kw["path"], kw["old_text"], kw["new_text"]),
 }
 
-# Child gets all base tools except task (no recursive spawning)
+# 子智能体获取除 task 外的所有基础工具（禁止递归派生）
 CHILD_TOOLS = [
     {"name": "bash", "description": "Run a shell command.",
      "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}},
@@ -110,10 +110,10 @@ CHILD_TOOLS = [
 ]
 
 
-# -- Subagent: fresh context, filtered tools, summary-only return --
+# -- 子智能体：全新的上下文，过滤后的工具，仅返回摘要 --
 def run_subagent(prompt: str) -> str:
-    sub_messages = [{"role": "user", "content": prompt}]  # fresh context
-    for _ in range(30):  # safety limit
+    sub_messages = [{"role": "user", "content": prompt}]  # 全新的上下文
+    for _ in range(30):  # 安全限制
         response = client.messages.create(
             model=MODEL, system=SUBAGENT_SYSTEM, messages=sub_messages,
             tools=CHILD_TOOLS, max_tokens=8000,
@@ -128,11 +128,11 @@ def run_subagent(prompt: str) -> str:
                 output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)[:50000]})
         sub_messages.append({"role": "user", "content": results})
-    # Only the final text returns to the parent -- child context is discarded
+    # 只有最后的文本返回给父智能体 —— 子上下文被丢弃
     return "".join(b.text for b in response.content if hasattr(b, "text")) or "(no summary)"
 
 
-# -- Parent tools: base tools + task dispatcher --
+# -- 父智能体工具：基础工具 + 任务分发器 --
 PARENT_TOOLS = CHILD_TOOLS + [
     {"name": "task", "description": "Spawn a subagent with fresh context. It shares the filesystem but not conversation history.",
      "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}, "description": {"type": "string", "description": "Short description of the task"}}, "required": ["prompt"]}},

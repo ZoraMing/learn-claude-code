@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-s12_worktree_task_isolation.py - Worktree + Task Isolation
+s12_worktree_task_isolation.py - 工作区与任务隔离 (Worktree + Task Isolation)
 
-Directory-level isolation for parallel task execution.
-Tasks are the control plane and worktrees are the execution plane.
+用于并行任务执行的目录级别隔离。
+任务是控制平面，而工作区 (worktrees) 是执行平面。
 
     .tasks/task_12.json
       {
@@ -26,7 +26,7 @@ Tasks are the control plane and worktrees are the execution plane.
         ]
       }
 
-Key insight: "Isolate by directory, coordinate by task ID."
+关键洞察："按目录进行隔离，按任务 ID 进行协同。"
 """
 
 import json
@@ -49,7 +49,7 @@ MODEL = get_model()
 
 
 def detect_repo_root(cwd: Path) -> Path | None:
-    """Return git repo root if cwd is inside a repo, else None."""
+    """如果当前工作目录在代码库中，则返回 git 代码库根目录，否则返回 None。"""
     try:
         r = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -77,7 +77,7 @@ SYSTEM = (
 )
 
 
-# -- EventBus: append-only lifecycle events for observability --
+# -- 事件总线 (EventBus): 用于可观测性的仅追加生命周期事件 --
 class EventBus:
     def __init__(self, event_log_path: Path):
         self.path = event_log_path
@@ -116,7 +116,7 @@ class EventBus:
         return json.dumps(items, indent=2)
 
 
-# -- TaskManager: persistent task board with optional worktree binding --
+# -- 任务管理器 (TaskManager): 具有可选工作区绑定的持久化任务看板 --
 class TaskManager:
     def __init__(self, tasks_dir: Path):
         self.dir = tasks_dir
@@ -219,7 +219,7 @@ TASKS = TaskManager(REPO_ROOT / ".tasks")
 EVENTS = EventBus(REPO_ROOT / ".worktrees" / "events.jsonl")
 
 
-# -- WorktreeManager: create/list/run/remove git worktrees + lifecycle index --
+# -- 工作区管理器 (WorktreeManager): 创建/列出/运行/移除 git 工作区 + 生命周期索引 --
 class WorktreeManager:
     def __init__(self, repo_root: Path, tasks: TaskManager, events: EventBus):
         self.repo_root = repo_root
@@ -472,7 +472,7 @@ class WorktreeManager:
 WORKTREES = WorktreeManager(REPO_ROOT, TASKS, EVENTS)
 
 
-# -- Base tools (kept minimal, same style as previous sessions) --
+# -- 基础工具 (Base tools，保持精简，与之前会话相同的风格) --
 def safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):

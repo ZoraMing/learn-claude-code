@@ -1,37 +1,37 @@
 #!/usr/bin/env python3
 """
-s05_skill_loading.py - Skills
+s05_skill_loading.py - 技能加载 (Skills)
 
-Two-layer skill injection that avoids bloating the system prompt:
+避免使系统提示词臃肿的双层技能注入方案：
 
-    Layer 1 (cheap): skill names in system prompt (~100 tokens/skill)
-    Layer 2 (on demand): full skill body in tool_result
+    第一层（低开销）：在系统提示词只提供技能名称（每个技能约 100 tokens）
+    第二层（按需加载）：通过 tool_result 提供完整的技能内容
 
     skills/
       pdf/
-        SKILL.md          <-- frontmatter (name, description) + body
+        SKILL.md          <-- 前置数据 (YAML metadata: 名称, 描述) + 本体内容
       code-review/
         SKILL.md
 
-    System prompt:
+    系统提示词 (System prompt):
     +--------------------------------------+
-    | You are a coding agent.              |
-    | Skills available:                    |
-    |   - pdf: Process PDF files...        |  <-- Layer 1: metadata only
-    |   - code-review: Review code...      |
+    | 你是一名 AI 编程助手。               |
+    | 可用技能：                           |
+    |   - pdf: 处理 PDF 文件...            |  <-- 第一层：仅元数据
+    |   - code-review: 代码审查...         |
     +--------------------------------------+
 
-    When model calls load_skill("pdf"):
+    当模型调用 load_skill("pdf") 时：
     +--------------------------------------+
-    | tool_result:                         |
+    | 工具结果 (tool_result):              |
     | <skill>                              |
-    |   Full PDF processing instructions   |  <-- Layer 2: full body
-    |   Step 1: ...                        |
-    |   Step 2: ...                        |
+    |   完整的 PDF 处理指令                 |  <-- 第二层：完整内容
+    |   第 1 步: ...                       |
+    |   第 2 步: ...                       |
     | </skill>                             |
     +--------------------------------------+
 
-Key insight: "Don't put everything in the system prompt. Load on demand."
+关键洞察："不要把所有东西都塞进系统提示词，按需加载。"
 """
 
 import os
@@ -52,7 +52,7 @@ MODEL = get_model()
 SKILLS_DIR = WORKDIR / "skills"
 
 
-# -- SkillLoader: scan skills/<name>/SKILL.md with YAML frontmatter --
+# -- SkillLoader: 扫描解析 skills/<name>/SKILL.md 及 YAML 前置元数据 --
 class SkillLoader:
     def __init__(self, skills_dir: Path):
         self.skills_dir = skills_dir
@@ -69,7 +69,7 @@ class SkillLoader:
             self.skills[name] = {"meta": meta, "body": body, "path": str(f)}
 
     def _parse_frontmatter(self, text: str) -> tuple:
-        """Parse YAML frontmatter between --- delimiters."""
+        """解析位于 --- 分隔符之间的 YAML 前置元数据 (frontmatter)。"""
         match = re.match(r"^---\n(.*?)\n---\n(.*)", text, re.DOTALL)
         if not match:
             return {}, text
@@ -81,7 +81,7 @@ class SkillLoader:
         return meta, match.group(2).strip()
 
     def get_descriptions(self) -> str:
-        """Layer 1: short descriptions for the system prompt."""
+        """第一层：用于系统提示词的简短描述。"""
         if not self.skills:
             return "(no skills available)"
         lines = []
@@ -95,7 +95,7 @@ class SkillLoader:
         return "\n".join(lines)
 
     def get_content(self, name: str) -> str:
-        """Layer 2: full skill body returned in tool_result."""
+        """第二层：在工具结果 (tool_result) 中返回完整的技能内容。"""
         skill = self.skills.get(name)
         if not skill:
             return f"Error: Unknown skill '{name}'. Available: {', '.join(self.skills.keys())}"
@@ -104,7 +104,7 @@ class SkillLoader:
 
 SKILL_LOADER = SkillLoader(SKILLS_DIR)
 
-# Layer 1: skill metadata injected into system prompt
+# 第一层：将技能元数据注入系统提示词
 SYSTEM = f"""You are a coding agent at {WORKDIR}.
 Use load_skill to access specialized knowledge before tackling unfamiliar topics.
 
@@ -112,7 +112,7 @@ Skills available:
 {SKILL_LOADER.get_descriptions()}"""
 
 
-# -- Tool implementations --
+# -- 工具实现 --
 def safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):

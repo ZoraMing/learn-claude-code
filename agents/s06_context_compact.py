@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 """
-s06_context_compact.py - Compact
+s06_context_compact.py - 上下文压缩 (Compact)
 
-Three-layer compression pipeline so the agent can work forever:
+三层压缩管道，使智能体能够永远工作下去：
 
-    Every turn:
+    每轮对话：
     +------------------+
-    | Tool call result |
+    | 工具调用结果     |
     +------------------+
             |
             v
-    [Layer 1: micro_compact]        (silent, every turn)
-      Replace tool_result content older than last 3
-      with "[Previous: used {tool_name}]"
+    [第 1 层：微型压缩 (micro_compact)]        （静默执行，每次轮询）
+      将超过最后 3 次的旧 tool_result 内容
+      替换为 "[Previous: used {tool_name}]"
             |
             v
-    [Check: tokens > 50000?]
+    [检查：tokens > 50000?]
        |               |
-       no              yes
+       否             是
        |               |
        v               v
-    continue    [Layer 2: auto_compact]
-                  Save full transcript to .transcripts/
-                  Ask LLM to summarize conversation.
-                  Replace all messages with [summary].
+    继续        [第 2 层：自动压缩 (auto_compact)]
+                  将完整对话记录保存至 .transcripts/
+                  让 LLM 总结对话。
+                  用 [summary] 总结替换所有消息内容。
                         |
                         v
-                [Layer 3: compact tool]
-                  Model calls compact -> immediate summarization.
-                  Same as auto, triggered manually.
+                [第 3 层：手动压缩工具 (compact tool)]
+                  模型主动调用 compact 工具 -> 立即进行压缩总结。
+                  原理同自动压缩，只不过是手动触发。
 
-Key insight: "The agent can forget strategically and keep working forever."
+关键洞察："智能体可以通过策略性遗忘，从而能够永远保持工作状态。"
 """
 
 import json
@@ -58,11 +58,11 @@ KEEP_RECENT = 3
 
 
 def estimate_tokens(messages: list) -> int:
-    """Rough token count: ~4 chars per token."""
+    """粗略估算 tokens：约 4 个字符为一个 token。"""
     return len(str(messages)) // 4
 
 
-# -- Layer 1: micro_compact - replace old tool results with placeholders --
+# -- 第 1 层：微型压缩 (micro_compact) - 用占位符替换旧的工具调用结果 --
 def micro_compact(messages: list) -> list:
     # Collect (msg_index, part_index, tool_result_dict) for all tool_result entries
     tool_results = []
@@ -82,7 +82,7 @@ def micro_compact(messages: list) -> list:
                 for block in content:
                     if hasattr(block, "type") and block.type == "tool_use":
                         tool_name_map[block.id] = block.name
-    # Clear old results (keep last KEEP_RECENT)
+    # 清理旧结果（仅保留最新的 KEEP_RECENT 数量的结果）
     to_clear = tool_results[:-KEEP_RECENT]
     for _, _, result in to_clear:
         if isinstance(result.get("content"), str) and len(result["content"]) > 100:
@@ -92,7 +92,7 @@ def micro_compact(messages: list) -> list:
     return messages
 
 
-# -- Layer 2: auto_compact - save transcript, summarize, replace messages --
+# -- 第 2 层：自动压缩 (auto_compact) - 保存记录，生成总结，替换消息 --
 def auto_compact(messages: list) -> list:
     # Save full transcript to disk
     TRANSCRIPT_DIR.mkdir(exist_ok=True)
@@ -112,14 +112,14 @@ def auto_compact(messages: list) -> list:
         max_tokens=2000,
     )
     summary = response.content[0].text
-    # Replace all messages with compressed summary
+    # 用压缩后的总结替换所有消息
     return [
         {"role": "user", "content": f"[Conversation compressed. Transcript: {transcript_path}]\n\n{summary}"},
         {"role": "assistant", "content": "Understood. I have the context from the summary. Continuing."},
     ]
 
 
-# -- Tool implementations --
+# -- 工具实现 --
 def safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):
@@ -192,9 +192,9 @@ TOOLS = [
 
 def agent_loop(messages: list):
     while True:
-        # Layer 1: micro_compact before each LLM call
+        # 第 1 层：在每次 LLM 调用前执行微型压缩 (micro_compact)
         micro_compact(messages)
-        # Layer 2: auto_compact if token estimate exceeds threshold
+        # 第 2 层：如果估计的 token 超过了阈值，则触发自动压缩 (auto_compact)
         if estimate_tokens(messages) > THRESHOLD:
             print("[auto_compact triggered]")
             messages[:] = auto_compact(messages)
@@ -221,7 +221,7 @@ def agent_loop(messages: list):
                 print(f"> {block.name}: {str(output)[:200]}")
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)})
         messages.append({"role": "user", "content": results})
-        # Layer 3: manual compact triggered by the compact tool
+        # 第 3 层：由 compact 工具触发的手动压缩
         if manual_compact:
             print("[manual compact]")
             messages[:] = auto_compact(messages)

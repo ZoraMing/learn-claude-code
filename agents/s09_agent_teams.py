@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-s09_agent_teams.py - Agent Teams
+s09_agent_teams.py - 智能体团队 (Agent Teams)
 
-Persistent named agents with file-based JSONL inboxes. Each teammate runs
-its own agent loop in a separate thread. Communication via append-only inboxes.
+使用基于文件的 JSONL "收件箱"建立具名的、持久化运行的智能体团队。
+每个成员都在单独的线程中运行各自的智能体循环。通信方式为仅支持追加的收件箱。
 
-    Subagent (s04):  spawn -> execute -> return summary -> destroyed
-    Teammate (s09):  spawn -> work -> idle -> work -> ... -> shutdown
+    子智能体(s04)： 派生 -> 执行 -> 返回摘要 -> 被销毁
+    团队成员(s09)： 派生 -> 工作 -> 空闲 -> 工作 -> ... -> 收到关闭信号才退出
 
     .team/config.json                   .team/inbox/
     +----------------------------+      +------------------+
@@ -16,30 +16,30 @@ its own agent loop in a separate thread. Communication via append-only inboxes.
     |     "role":"coder",        |      +------------------+
     |     "status":"idle"}       |
     |  ]}                        |      send_message("alice", "fix bug"):
-    +----------------------------+        open("alice.jsonl", "a").write(msg)
+    +----------------------------+        打开 "alice.jsonl" 以 "a" 追加模式写入消息
 
                                         read_inbox("alice"):
-    spawn_teammate("alice","coder",...)   msgs = [json.loads(l) for l in ...]
-         |                                open("alice.jsonl", "w").close()
-         v                                return msgs  # drain
-    Thread: alice             Thread: bob
+    spawn_teammate("alice","coder",...)   msgs = [解析每一行 json]
+         |                                将 "alice.jsonl" 清空
+         v                                return msgs  # 排空收件箱
+    线程: alice             线程: bob
     +------------------+      +------------------+
     | agent_loop       |      | agent_loop       |
     | status: working  |      | status: idle     |
-    | ... runs tools   |      | ... waits ...    |
+    | ... 运行工具     |      | ... 等待信件...  |
     | status -> idle   |      |                  |
     +------------------+      +------------------+
 
-    5 message types (all declared, not all handled here):
+    5 种消息类型 (在这个文件中全部声明，但未全部处理):
     +-------------------------+-----------------------------------+
-    | message                 | Normal text message               |
-    | broadcast               | Sent to all teammates             |
-    | shutdown_request        | Request graceful shutdown (s10)   |
-    | shutdown_response       | Approve/reject shutdown (s10)     |
-    | plan_approval_response  | Approve/reject plan (s10)         |
+    | message                 | 普通文本消息                      |
+    | broadcast               | 广播给所有队友                    |
+    | shutdown_request        | 请求优雅关闭 (s10 使用)           |
+    | shutdown_response       | 同意/拒绝关闭 (s10 使用)          |
+    | plan_approval_response  | 同意/拒绝计划 (s10 使用)          |
     +-------------------------+-----------------------------------+
 
-Key insight: "Teammates that can talk to each other."
+关键洞察："队友之间能够相互交流沟通。"
 """
 
 import json
@@ -71,7 +71,7 @@ VALID_MSG_TYPES = {
 }
 
 
-# -- MessageBus: JSONL inbox per teammate --
+# -- 消息总线 (MessageBus)：每个队员一个 JSONL 格式的收件箱 --
 class MessageBus:
     def __init__(self, inbox_dir: Path):
         self.dir = inbox_dir
@@ -117,7 +117,7 @@ class MessageBus:
 BUS = MessageBus(INBOX_DIR)
 
 
-# -- TeammateManager: persistent named agents with config.json --
+# -- 队友管理器 (TeammateManager)：具备持久化以及 config.json 记录的具名智能体 --
 class TeammateManager:
     def __init__(self, team_dir: Path):
         self.dir = team_dir
@@ -201,7 +201,7 @@ class TeammateManager:
             self._save_config()
 
     def _exec(self, sender: str, tool_name: str, args: dict) -> str:
-        # these base tools are unchanged from s02
+        # 这些是由 s02 不变的基础工具
         if tool_name == "bash":
             return _run_bash(args["command"])
         if tool_name == "read_file":
@@ -217,7 +217,7 @@ class TeammateManager:
         return f"Unknown tool: {tool_name}"
 
     def _teammate_tools(self) -> list:
-        # these base tools are unchanged from s02
+        # 这些是由 s02 不变的基础工具
         return [
             {"name": "bash", "description": "Run a shell command.",
              "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}},
@@ -248,7 +248,7 @@ class TeammateManager:
 TEAM = TeammateManager(TEAM_DIR)
 
 
-# -- Base tool implementations (these base tools are unchanged from s02) --
+# -- 基础工具实现 (这些基础工具自 s02 以来没有改变) --
 def _safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):
@@ -303,7 +303,7 @@ def _run_edit(path: str, old_text: str, new_text: str) -> str:
         return f"Error: {e}"
 
 
-# -- Lead tool dispatch (9 tools) --
+# -- 队长工具分发 (Lead tool dispatch, 共 9 个) --
 TOOL_HANDLERS = {
     "bash":            lambda **kw: _run_bash(kw["command"]),
     "read_file":       lambda **kw: _run_read(kw["path"], kw.get("limit")),
@@ -316,7 +316,7 @@ TOOL_HANDLERS = {
     "broadcast":       lambda **kw: BUS.broadcast("lead", kw["content"], TEAM.member_names()),
 }
 
-# these base tools are unchanged from s02
+# 这些是由 s02 不变的基础工具
 TOOLS = [
     {"name": "bash", "description": "Run a shell command.",
      "input_schema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}},

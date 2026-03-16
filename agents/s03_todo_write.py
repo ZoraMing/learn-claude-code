@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
-s03_todo_write.py - TodoWrite
+s03_todo_write.py - 代办事项写入 (TodoWrite)
 
-The model tracks its own progress via a TodoManager. A nag reminder
-forces it to keep updating when it forgets.
+模型通过 TodoManager 追踪自己的进度。当它忘记更新时，一个"唠叨"提醒
+会强制它保持更新状态。
 
     +----------+      +-------+      +---------+
-    |   User   | ---> |  LLM  | ---> | Tools   |
-    |  prompt  |      |       |      | + todo  |
+    |   用户   | ---> |  LLM  | ---> | 工具集  |
+    |  提示词  |      |       |      | + todo  |
     +----------+      +---+---+      +----+----+
                           ^               |
                           |   tool_result |
                           +---------------+
                                 |
                     +-----------+-----------+
-                    | TodoManager state     |
+                    | TodoManager 状态      |
                     | [ ] task A            |
                     | [>] task B <- doing   |
                     | [x] task C            |
                     +-----------------------+
                                 |
-                    if rounds_since_todo >= 3:
-                      inject <reminder>
+                    循环次数 rounds_since_todo >= 3 时:
+                      注入 <reminder> 提醒
 
-Key insight: "The agent can track its own progress -- and I can see it."
+关键洞察："智能体能够追踪自己的进度 —— 而且我能看到。"
 """
 
 import os
@@ -46,7 +46,7 @@ Use the todo tool to plan multi-step tasks. Mark in_progress before starting, co
 Prefer tools over prose."""
 
 
-# -- TodoManager: structured state the LLM writes to --
+# -- TodoManager: LLM 可以写入的结构化状态 --
 class TodoManager:
     def __init__(self):
         self.items = []
@@ -87,7 +87,7 @@ class TodoManager:
 TODO = TodoManager()
 
 
-# -- Tool implementations --
+# -- 工具实现 --
 def safe_path(p: str) -> Path:
     path = (WORKDIR / p).resolve()
     if not path.is_relative_to(WORKDIR):
@@ -158,11 +158,11 @@ TOOLS = [
 ]
 
 
-# -- Agent loop with nag reminder injection --
+# -- 带有"唠叨"提醒注入的智能体循环 --
 def agent_loop(messages: list):
     rounds_since_todo = 0
     while True:
-        # Nag reminder is injected below, alongside tool results
+        # 下方与工具结果一起注入了"唠叨"提醒
         response = client.messages.create(
             model=MODEL, system=SYSTEM, messages=messages,
             tools=TOOLS, max_tokens=8000,
